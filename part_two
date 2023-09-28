@@ -1,0 +1,72 @@
+import paramiko
+import threading
+
+# Define the range of IP addresses for the VMs
+ip_range = range(100, 121)
+
+# Function to upgrade PostgreSQL on a single VM
+def upgrade_postgres(ip):
+    try:
+        # SSH connection parameters
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # SSH username and private key file (update with your own values)
+        username = 'ramt'
+        private_key_file = '/temp/private/key.pem'
+        
+        # Connect to the VM
+        ssh_client.connect(f'192.168.1.{ip}', username=username, key_filename=private_key_file)
+        
+        # Upgrade PostgreSQL (Debian specific)
+        upgrade_command = 'sudo apt-get update && sudo apt-get upgrade -y postgresql'
+        stdin, stdout, stderr = ssh_client.exec_command(upgrade_command)
+        
+        # Wait for the command to complete
+        stdout.channel.recv_exit_status()
+        
+        # Check if the upgrade was successful
+        if stdout.channel.exit_status == 0:
+            print(f'Successfully upgraded PostgreSQL on 192.168.1.{ip}')
+            # Additional commands to confirm PostgreSQL is running and accepting connections
+            # You can customize these commands based on your setup
+            confirm_command = 'sudo systemctl status postgresql'
+            stdin, stdout, stderr = ssh_client.exec_command(confirm_command)
+            output = stdout.read().decode('utf-8')
+            if 'Active: active (running)' in output:
+                print(f'PostgreSQL is running on 192.168.1.{ip}')
+        else:
+            print(f'Failed to upgrade PostgreSQL on 192.168.1.{ip}')
+        
+        ssh_client.close()
+    except Exception as e:
+        print(f'Error on 192.168.1.{ip}: {str(e)}')
+
+# Create threads to upgrade VMs in parallel
+threads = []
+for ip in ip_range:
+    thread = threading.Thread(target=upgrade_postgres, args=(ip,))
+    threads.append(thread)
+    thread.start()
+
+# Wait for all threads to complete
+for thread in threads:
+    thread.join()
+
+# To find and kill long-running queries for the user "web" in PostgreSQL:
+SELECT
+    pg_terminate_backend (pg_stat_activity.pg_backend_pid)
+FROM
+    pg_stat_activity
+WHERE
+    pg_stat_activity.state = 'active'
+    AND pg_stat_activity.query_start < NOW() - interval '1 minute'
+    AND pg_stat_activity.usename = 'web';
+
+
+Please note the following:
+
+Replace 'ramt' with desired SSH username and provide the path to the private key file (private_key_file) for SSH authentication.
+Should customize the upgrade command and the PostgreSQL confirmation command based on the setup.
+This script uses threads to upgrade VMs in parallel, but should be cautious about overloading local system with too many parallel SSH connections. Can adjust the number of threads based on system's capacity.
+For the bonus task of finding and killing long-running queries for the "web" user, one would need to use PostgreSQL-specific tools and SQL queries, and it should be executed after the PostgreSQL upgrade. One can add this as an additional step within the upgrade_postgres function.
