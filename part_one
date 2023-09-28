@@ -1,0 +1,105 @@
+-- Step 1: Create a new database
+CREATE DATABASE music_catalog;
+
+-- Step 2: Connect to the new database
+\c music_catalog;
+
+-- Step 3: Create roles for different user types
+CREATE ROLE music_catalog_admin;
+CREATE ROLE music_catalog_rw;
+CREATE ROLE music_catalog_ro;
+
+-- Step 4: Create the schema for the music catalog
+CREATE SCHEMA music_catalog;
+
+-- Step 5: Create tables for Users
+CREATE TABLE music_catalog.users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL -- You can use 'music_catalog_admin', 'write', 'music_catalog_ro' for roles
+);
+
+-- Step 6: Create tables for Music Albums & Tracks
+CREATE TABLE music_catalog.albums (
+    album_id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    release_date DATE,
+    rightsholder_id INT REFERENCES music_catalog.rightsholders(rightsholder_id)
+);
+
+CREATE TABLE music_catalog.tracks (
+    track_id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    duration INT,
+    album_id INT REFERENCES music_catalog.albums(album_id),
+    rightsholder_id INT REFERENCES music_catalog.rightsholders(rightsholder_id)
+);
+
+-- Step 7: Create tables for Rightsholders
+CREATE TABLE music_catalog.rightsholders (
+    rightsholder_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);
+
+-- Step 8: Create tables for Rightsholders Organization and Users Authentication (BONUS)
+CREATE TABLE music_catalog.rightsholder_organization (
+    organization_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE music_catalog.rightsholder_users (
+    user_id INT REFERENCES music_catalog.users(user_id),
+    organization_id INT REFERENCES music_catalog.rightsholder_organization(organization_id)
+);
+
+-- Model Compilation Albums (if needed)
+CREATE TABLE music_catalog.compilation_albums (
+    compilation_id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE music_catalog.compilation_tracks (
+    compilation_track_id SERIAL PRIMARY KEY,
+    compilation_id INT REFERENCES music_catalog.compilation_albums(compilation_id),
+    track_id INT REFERENCES music_catalog.tracks(track_id)
+);
+
+-- Track changes in ownership of albums and tracks for compilations (if needed)
+CREATE TABLE music_catalog.ownership_changes (
+    change_id SERIAL PRIMARY KEY,
+    track_id INT REFERENCES music_catalog.tracks(track_id),
+    new_rightsholder_id INT REFERENCES music_catalog.rightsholders(rightsholder_id),
+    change_date TIMESTAMP
+);
+
+-- Step 9: Grant privileges to roles
+-- For example, to grant music_catalog_administrative privileges to a user named 'music_catalog_admin_user':
+grant connect on database music_catalog to music_catalog_admin,music_catalog_rw,music_catalog_ro;
+Admin role:
+GRANT ALL PRIVILEGES ON SCHEMA music_catalog TO music_catalog_admin;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA music_catalog TO music_catalog_admin;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA music_catalog TO music_catalog_admin;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA music_catalog TO user_role, music_catalog_admin;
+GRANT ALL PRIVILEGES ON ALL PROCEDURES IN SCHEMA music_catalog TO user_role, music_catalog_admin;
+GRANT ALL PRIVILEGES ON ALL ROUTINES IN SCHEMA music_catalog TO user_role, music_catalog_admin;
+
+Read write role:
+GRANT USAGE, CREATE ON SCHEMA music_catalog TO music_catalog_rw;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA music_catalog TO music_catalog_rw;
+ALTER DEFAULT PRIVILEGES IN SCHEMA music_catalog GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO music_catalog_rw;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA music_catalog TO music_catalog_rw;
+ALTER DEFAULT PRIVILEGES IN SCHEMA music_catalog GRANT USAGE ON SEQUENCES TO music_catalog_rw;
+
+Read only role:
+GRANT USAGE ON SCHEMA music_catalog TO music_catalog_ro;
+GRANT SELECT ON ALL TABLES IN SCHEMA music_catalog TO music_catalog_ro;
+ALTER DEFAULT PRIVILEGES IN SCHEMA music_catalog GRANT SELECT ON TABLES TO music_catalog_ro;
+
+CREATE USER mc_admin_user WITH PASSWORD 'password_1';
+grant music_catalog_admin to mc_admin_user;
+CREATE USER mc_rw_user WITH PASSWORD 'password_2';
+grant music_catalog_rw to mc_rw_user;
+CREATE USER mc_ro_user WITH PASSWORD 'password_3';
+grant music_catalog_ro to mc_ro_user;
+
